@@ -139,7 +139,7 @@ export function StudentForm({
                 name="departmentId"
                 render={({ field }) => (
                   <Select
-                    value={field.value || undefined}
+                    value={field.value}
                     onValueChange={(v) => {
                       if (v === MANUAL) {
                         setManual(true);
