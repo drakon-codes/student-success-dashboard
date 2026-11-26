@@ -1,22 +1,34 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { format, formatDistanceToNow } from "date-fns";
-import { ChevronLeft, ChevronRight, Eye, Pencil, RefreshCw, Search, UserPlus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Pencil, RefreshCw, Search, Trash2, UserPlus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ApiNotConfigured, EmptyState, ErrorState } from "@/components/common/States";
 import { PageHeader } from "@/components/common/PageHeader";
 import { DepartmentBadge } from "@/components/students/DepartmentBadge";
 import { StudentAvatar } from "@/components/students/StudentAvatar";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { isApiConfigured } from "@/lib/api";
+import { getApiErrorMessage, isApiConfigured } from "@/lib/api";
+import { departmentsQueryOptions } from "@/lib/departments";
 import {
   formatStudentId,
   fullName,
-  listDepartments,
+  deleteStudent,
   parseDateOnly,
   parseDateTime,
+  studentKeys,
   studentsQueryOptions,
   type Student,
 } from "@/lib/students";
@@ -76,6 +88,7 @@ function StudentsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: "/students/" });
   const query = useQuery(studentsQueryOptions);
+  const departmentsQuery = useQuery(departmentsQueryOptions);
   const [text, setText] = useState(search.q ?? "");
   const [page, setPage] = useState(1);
   const sort = search.sort ?? "newest";
@@ -104,7 +117,7 @@ function StudentsPage() {
   }, [text]);
 
   const students = query.data ?? [];
-  const departments = useMemo(() => listDepartments(students), [students]);
+  const departments = departmentsQuery.data ?? [];
 
   const filtered = useMemo(() => {
     const q = (search.q ?? "").toLowerCase().trim();
@@ -183,7 +196,7 @@ function StudentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All departments</SelectItem>
-                  {departments.map((d) => (
+                {departments.map((d) => (
                     <SelectItem key={d.departmentId} value={String(d.departmentId)}>
                       {d.departmentName}
                     </SelectItem>
@@ -204,6 +217,12 @@ function StudentsPage() {
               </Select>
             </div>
           </div>
+
+          {departmentsQuery.isError ? (
+            <p className="border-t border-border px-4 py-2 text-xs text-destructive" role="alert">
+              Department filters are unavailable. {getApiErrorMessage(departmentsQuery.error)}
+            </p>
+          ) : null}
 
           {query.isPending ? (
             <TableSkeleton />
@@ -275,9 +294,28 @@ function StudentsPage() {
 
 function StudentRow({ student: s }: { student: Student }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const dob = parseDateOnly(s.dateOfBirth);
   const created = parseDateTime(s.createdAt);
   const open = () => void navigate({ to: "/students/$studentId", params: { studentId: String(s.studentId) } });
+  const confirmDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteStudent(s.studentId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: studentKeys.all }),
+        queryClient.invalidateQueries({ queryKey: studentKeys.detail(s.studentId) }),
+      ]);
+      toast.success(`${fullName(s)} deleted`);
+      setDeleteOpen(false);
+    } catch (error) {
+      toast.error(`Could not delete ${fullName(s)}: ${getApiErrorMessage(error)}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
   return (
     <tr onClick={open} className="group cursor-pointer transition-colors hover:bg-surface-hover/40">
       <td className="px-5 py-3 font-mono text-xs text-subtle-foreground">{formatStudentId(s.studentId)}</td>
@@ -312,6 +350,31 @@ function StudentRow({ student: s }: { student: Student }) {
               <Pencil />
             </Link>
           </Button>
+          <AlertDialog open={deleteOpen} onOpenChange={(open) => !deleting && setDeleteOpen(open)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 text-destructive hover:text-destructive"
+              aria-label={`Delete ${fullName(s)}`}
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 />
+            </Button>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {fullName(s)}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently deletes this student record. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+                <Button variant="destructive" onClick={() => void confirmDelete()} disabled={deleting}>
+                  {deleting ? "Deleting…" : "Delete student"}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </td>
     </tr>

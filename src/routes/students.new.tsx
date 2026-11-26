@@ -1,14 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ApiNotConfigured } from "@/components/common/States";
+import { ApiNotConfigured, ErrorState } from "@/components/common/States";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StudentForm } from "@/components/students/StudentForm";
+import { Skeleton } from "@/components/ui/skeleton";
 import { isApiConfigured } from "@/lib/api";
+import { departmentsQueryOptions } from "@/lib/departments";
 import {
   createStudent,
   emptyFormValues,
-  listDepartments,
   studentKeys,
   studentsQueryOptions,
   toCreatePayload,
@@ -31,19 +32,24 @@ export const Route = createFileRoute("/students/new")({
 function NewStudentPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data } = useQuery(studentsQueryOptions);
-  const departments = listDepartments(data ?? []);
+  const departments = useQuery(departmentsQueryOptions);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader eyebrow="Students" title="New student" description="Create a record in your database." />
       {!isApiConfigured ? (
         <ApiNotConfigured />
+      ) : departments.isError ? (
+        <ErrorState error={departments.error} onRetry={() => void departments.refetch()} />
+      ) : departments.isPending ? (
+        <div className="surface-card h-80 p-6">
+          <Skeleton className="h-full w-full bg-surface-hover" />
+        </div>
       ) : (
         <StudentForm
           mode="create"
           defaultValues={emptyFormValues()}
-          departments={departments}
+          departments={departments.data}
           onCancel={() => void navigate({ to: "/students" })}
           onSubmit={async (values) => {
             const created = await createStudent(toCreatePayload(values));

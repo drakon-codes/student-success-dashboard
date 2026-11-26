@@ -24,7 +24,8 @@ const ENDPOINTS = [
   { method: "GET", path: "/api/Students" },
   { method: "GET", path: "/api/Students/{id}" },
   { method: "POST", path: "/api/Students" },
-  { method: "PUT", path: "/api/Students" },
+  { method: "PUT", path: "/api/Students/{id}" },
+  { method: "DELETE", path: "/api/Students/{id}" },
 ];
 
 type TestResult = { ok: true; count: number; ms: number } | { ok: false; message: string };

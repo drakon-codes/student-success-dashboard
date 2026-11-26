@@ -59,7 +59,8 @@ My API endpoints:
 GET /api/Students
 GET /api/Students/{id}
 POST /api/Students
-PUT /api/Students
+PUT /api/Students/{id}
+DELETE /api/Students/{id}
 
 This project was built with [Lovable](https://lovable.dev).
 

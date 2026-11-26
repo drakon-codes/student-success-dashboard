@@ -90,7 +90,7 @@ export function StudentForm({
             <Input id="email" type="email" autoComplete="email" placeholder="aarav.sharma@university.edu" className="pl-9" aria-invalid={!!errors.email} {...register("email")} />
           </Field>
           <Field label="Phone" optional htmlFor="phone" error={errors.phone?.message} icon={<Phone />}>
-            <Input id="phone" type="tel" autoComplete="tel" placeholder="+91 98765 43210" className="pl-9" aria-invalid={!!errors.phone} {...register("phone")} />
+            <Input id="phone" type="tel" autoComplete="tel" placeholder="9876543210 or +919876543210" className="pl-9" aria-invalid={!!errors.phone} {...register("phone")} />
           </Field>
         </div>
       </Section>

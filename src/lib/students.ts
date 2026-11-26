@@ -1,10 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
+import type { Department } from "./departments";
 import { api, isApiConfigured, unwrapList } from "./api";
-
-export interface Department {
-  departmentId: number;
-  departmentName: string;
-}
+export type { Department } from "./departments";
 
 /** Mirrors the C# Student entity (camelCase JSON). CreatedAt is read-only in the UI. */
 export interface Student {
@@ -16,7 +13,7 @@ export interface Student {
   dateOfBirth: string | null;
   departmentId: number;
   createdAt: string;
-  department: Department | null;
+  department: Pick<Department, "departmentId" | "departmentName"> | null;
 }
 
 /** Form state. The Department navigation object is never part of a form. */
@@ -60,13 +57,20 @@ function optStr(v: unknown): string | null {
 export function normalizeStudent(raw: unknown): Student {
   const o = (raw ?? {}) as Record<string, unknown>;
   const deptRaw = pick(o, "department");
-  let department: Department | null = null;
+  let department: Pick<Department, "departmentId" | "departmentName"> | null = null;
   if (deptRaw && typeof deptRaw === "object") {
     const d = deptRaw as Record<string, unknown>;
     department = {
       departmentId: Number(pick(d, "departmentId") ?? 0),
       departmentName: str(pick(d, "departmentName")),
     };
+  }
+  const departmentId = Number(pick(o, "departmentId") ?? department?.departmentId ?? 0);
+  const departmentName = str(pick(o, "departmentName") ?? department?.departmentName);
+  if (!department && (departmentId > 0 || departmentName)) {
+    department = { departmentId, departmentName };
+  } else if (department && !department.departmentName && departmentName) {
+    department.departmentName = departmentName;
   }
   return {
     studentId: Number(pick(o, "studentId") ?? 0),
@@ -75,7 +79,7 @@ export function normalizeStudent(raw: unknown): Student {
     email: str(pick(o, "email")),
     phone: optStr(pick(o, "phone")),
     dateOfBirth: optStr(pick(o, "dateOfBirth")),
-    departmentId: Number(pick(o, "departmentId") ?? department?.departmentId ?? 0),
+    departmentId,
     createdAt: str(pick(o, "createdAt")),
     department,
   };
@@ -98,9 +102,14 @@ export async function createStudent(payload: StudentPayload): Promise<Student | 
   return data && typeof data === "object" ? normalizeStudent(data) : null;
 }
 
-/** PUT /api/Students — the student id travels in the body, not the URL. */
-export async function updateStudent(payload: StudentPayload): Promise<void> {
-  await api.put("/api/Students", payload);
+/** PUT /api/Students/{id}. */
+export async function updateStudent(id: number, payload: StudentPayload): Promise<void> {
+  await api.put(`/api/Students/${id}`, payload);
+}
+
+/** DELETE /api/Students/{id}. A 204 response is a successful Axios response. */
+export async function deleteStudent(id: number): Promise<void> {
+  await api.delete(`/api/Students/${id}`);
 }
 
 export const studentKeys = {
@@ -143,7 +152,7 @@ export function toFormValues(s: Student): StudentFormValues {
 }
 
 function baseFields(v: StudentFormValues) {
-  const phone = v.phone.trim();
+  const phone = v.phone;
   return {
     firstName: v.firstName.trim(),
     lastName: v.lastName.trim(),
@@ -154,8 +163,8 @@ function baseFields(v: StudentFormValues) {
   };
 }
 
-export function toCreatePayload(v: StudentFormValues, now: Date = new Date()): StudentPayload {
-  return { ...baseFields(v), createdAt: now.toISOString() };
+export function toCreatePayload(v: StudentFormValues): StudentPayload {
+  return baseFields(v);
 }
 
 /** Keeps the original StudentId and read-only CreatedAt so the update never resets them. */
@@ -189,7 +198,15 @@ export function parseDateOnly(value: string | null): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!m) return null;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (
+    Number.isNaN(d.getTime()) ||
+    d.getFullYear() !== Number(m[1]) ||
+    d.getMonth() !== Number(m[2]) - 1 ||
+    d.getDate() !== Number(m[3])
+  ) {
+    return null;
+  }
+  return d;
 }
 
 export function parseDateTime(value: string | null): Date | null {
@@ -203,24 +220,6 @@ export function ageOn(dob: Date, now: Date): number {
   const m = now.getMonth() - dob.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
   return age;
-}
-
-/** Unique departments seen on loaded students (the API has no departments endpoint). */
-export function listDepartments(students: Student[]): Department[] {
-  const map = new Map<number, string>();
-  for (const s of students) {
-    if (!s.departmentId) continue;
-    const name = s.department?.departmentName?.trim();
-    if (name || !map.has(s.departmentId)) {
-      map.set(s.departmentId, name || map.get(s.departmentId) || "");
-    }
-  }
-  return [...map.entries()]
-    .map(([departmentId, departmentName]) => ({
-      departmentId,
-      departmentName: departmentName || `Department #${departmentId}`,
-    }))
-    .sort((a, b) => a.departmentName.localeCompare(b.departmentName));
 }
 
 // ---------- dashboard stats ----------

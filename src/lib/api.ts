@@ -1,10 +1,40 @@
 import axios, { isAxiosError } from "axios";
+import { clearSession, getCurrentToken } from "./auth";
 
 /**
  * The API address comes only from VITE_API_BASE_URL (.env). Nothing else in the app
  * hardcodes it. A value still containing the YOUR_PORT placeholder counts as unset.
  */
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
+const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
+
+function isPrivateIpv4(hostname: string): boolean {
+  const octets = hostname.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return false;
+  }
+  return (
+    octets[0] === 10 ||
+    octets[0] === 192 && octets[1] === 168 ||
+    octets[0] === 172 && octets[1] !== undefined && octets[1] >= 16 && octets[1] <= 31
+  );
+}
+
+function resolveApiBaseUrl(): string {
+  if (!configuredApiBaseUrl || typeof window === "undefined") return configuredApiBaseUrl;
+  try {
+    const url = new URL(configuredApiBaseUrl);
+    // The API and frontend run on the same computer. Loopback avoids cross-host
+    // browser restrictions when this same private LAN API is accessed via localhost.
+    if (window.location.hostname === "localhost" && isPrivateIpv4(url.hostname)) {
+      url.hostname = "localhost";
+    }
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return configuredApiBaseUrl;
+  }
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export const isApiConfigured = API_BASE_URL.length > 0 && !/YOUR_PORT/i.test(API_BASE_URL);
 
@@ -16,6 +46,44 @@ export const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+function isLoginRequest(url: string | undefined, baseURL: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const fallbackOrigin = typeof window === "undefined" ? "http://localhost" : window.location.origin;
+    return new URL(url, baseURL || fallbackOrigin).pathname.toLowerCase() === "/api/auth/login";
+  } catch {
+    return (url.toLowerCase().split("?")[0] ?? "").endsWith("/api/auth/login");
+  }
+}
+
+api.interceptors.request.use((config) => {
+  if (isLoginRequest(config.url, config.baseURL)) {
+    config.headers.delete("Authorization");
+    return config;
+  }
+  const token = getCurrentToken();
+  if (token) config.headers.set("Authorization", `Bearer ${token}`);
+  else config.headers.delete("Authorization");
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    if (
+      isAxiosError(error) &&
+      error.response?.status === 401 &&
+      !isLoginRequest(error.config?.url, error.config?.baseURL)
+    ) {
+      clearSession();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("auth:unauthorized"));
+      }
+    }
+    return Promise.reject(error);
+  },
+);
 
 /** Accepts a plain JSON array or a System.Text.Json ReferenceHandler.Preserve wrapper. */
 export function unwrapList<T>(data: unknown): T[] {

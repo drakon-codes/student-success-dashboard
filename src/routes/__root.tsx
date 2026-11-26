@@ -4,6 +4,8 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
+  useRouterState,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
@@ -15,6 +17,7 @@ import { AppSidebar } from "../components/layout/AppSidebar";
 import { Topbar } from "../components/layout/Topbar";
 import { SidebarProvider } from "../components/ui/sidebar";
 import { Toaster } from "../components/ui/sonner";
+import { AuthProvider, useAuth } from "../lib/auth-context";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -55,6 +58,11 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+        {import.meta.env.DEV ? (
+          <pre className="mt-4 max-w-full overflow-x-auto rounded-md border border-destructive/30 bg-destructive-soft p-3 text-left text-xs text-destructive">
+            {error instanceof Error ? error.stack ?? `${error.name}: ${error.message}` : String(error)}
+          </pre>
+        ) : null}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -132,19 +140,49 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AuthenticatedApplication />
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}
+
+function AuthenticatedApplication() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const navigate = useNavigate();
+  const { isAuthenticated, isLoading } = useAuth();
+  const isLoginPage = pathname === "/login";
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated && !isLoginPage) void navigate({ to: "/login", replace: true });
+    if (isAuthenticated && isLoginPage) void navigate({ to: "/", replace: true });
+  }, [isAuthenticated, isLoading, isLoginPage, navigate]);
+
+  let content: ReactNode;
+  if (isLoading || (!isAuthenticated && !isLoginPage) || (isAuthenticated && isLoginPage)) {
+    content = (
+      <div className="flex min-h-svh items-center justify-center bg-background text-sm text-muted-foreground" role="status">
+        Restoring secure session…
+      </div>
+    );
+  } else if (isLoginPage) {
+    content = <Outlet />;
+  } else {
+    content = (
       <SidebarProvider>
         <div className="flex min-h-svh w-full">
           <AppSidebar />
           <div className="flex min-w-0 flex-1 flex-col">
             <Topbar />
             <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-              {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
               <Outlet />
             </main>
           </div>
         </div>
-        <Toaster theme="dark" position="bottom-right" closeButton />
       </SidebarProvider>
-    </QueryClientProvider>
-  );
+    );
+  }
+
+  return <>{content}<Toaster theme="dark" position="bottom-right" closeButton /></>;
 }

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { GraduationCap, LayoutDashboard, PlugZap, UserPlus, Users } from "lucide-react";
+import { Building2, GraduationCap, LayoutDashboard, PlugZap, UserPlus, Users } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -21,7 +21,7 @@ export const APP_NAME = "Student Management System";
 
 type NavItem = {
   title: string;
-  to: "/" | "/students" | "/students/new" | "/settings";
+  to: "/" | "/students" | "/students/new" | "/departments" | "/settings";
   icon: typeof Users;
   match: (path: string) => boolean;
 };
@@ -35,6 +35,7 @@ const workspace: NavItem[] = [
     match: (p) => p.startsWith("/students") && p !== "/students/new",
   },
   { title: "Add student", to: "/students/new", icon: UserPlus, match: (p) => p === "/students/new" },
+  { title: "Departments", to: "/departments", icon: Building2, match: (p) => p.startsWith("/departments") },
 ];
 
 const system: NavItem[] = [

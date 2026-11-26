@@ -1,8 +1,9 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ChevronRight, Plus, Search } from "lucide-react";
+import { ChevronRight, LogOut, Plus, Search } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useAuth } from "@/lib/auth-context";
 
 function crumbsFor(path: string): string[] {
   if (path === "/") return ["Dashboard"];
@@ -20,6 +21,7 @@ export function Topbar() {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const crumbs = crumbsFor(path);
+  const { logout } = useAuth();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -74,6 +76,19 @@ export function Topbar() {
           <Link to="/students/new">
             <Plus /> <span className="hidden sm:inline">New student</span>
           </Link>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 px-3"
+          aria-label="Sign out"
+          onClick={() => {
+            logout();
+            void navigate({ to: "/login", replace: true });
+          }}
+        >
+          <LogOut /> <span className="hidden sm:inline">Sign out</span>
         </Button>
       </div>
     </header>

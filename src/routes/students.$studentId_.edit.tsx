@@ -6,12 +6,11 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { StudentForm } from "@/components/students/StudentForm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isApiConfigured } from "@/lib/api";
+import { departmentsQueryOptions } from "@/lib/departments";
 import {
   fullName,
-  listDepartments,
   studentKeys,
   studentQueryOptions,
-  studentsQueryOptions,
   toFormValues,
   toUpdatePayload,
   updateStudent,
@@ -36,7 +35,7 @@ function EditStudentPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const query = useQuery(studentQueryOptions(Number(studentId)));
-  const all = useQuery(studentsQueryOptions);
+  const departments = useQuery(departmentsQueryOptions);
   const toProfile = () => void navigate({ to: "/students/$studentId", params: { studentId } });
 
   return (
@@ -50,7 +49,9 @@ function EditStudentPage() {
         <ApiNotConfigured />
       ) : query.isError ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-      ) : !query.data ? (
+      ) : departments.isError ? (
+        <ErrorState error={departments.error} onRetry={() => void departments.refetch()} />
+      ) : !query.data || departments.isPending ? (
         <div className="surface-card h-80 p-6">
           <Skeleton className="h-full w-full bg-surface-hover" />
         </div>
@@ -59,13 +60,13 @@ function EditStudentPage() {
           key={query.data.studentId}
           mode="edit"
           defaultValues={toFormValues(query.data)}
-          departments={listDepartments(all.data ?? [query.data])}
+          departments={departments.data}
           createdAt={query.data.createdAt}
           onCancel={toProfile}
           onSubmit={async (values) => {
             const original = query.data;
             if (!original) return;
-            await updateStudent(toUpdatePayload(original, values));
+            await updateStudent(original.studentId, toUpdatePayload(original, values));
             await queryClient.invalidateQueries({ queryKey: studentKeys.all });
             toast.success("Changes saved");
             toProfile();
