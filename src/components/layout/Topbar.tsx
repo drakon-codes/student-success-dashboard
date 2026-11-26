@@ -7,7 +7,6 @@ import { useAuth } from "@/lib/auth-context";
 
 function crumbsFor(path: string): string[] {
   if (path === "/") return ["Dashboard"];
-  if (path === "/settings") return ["System", "API connection"];
   if (path === "/students") return ["Students"];
   if (path === "/students/new") return ["Students", "New student"];
   if (/^\/students\/[^/]+\/edit$/.test(path)) return ["Students", "Edit"];
